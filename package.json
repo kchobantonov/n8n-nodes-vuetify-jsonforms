@@ -55,7 +55,6 @@
     ]
   },
   "dependencies": {
-    "@chobantonov/jsonforms-vuetify-webcomponent": "3.6.0",
     "ajv": "^8.6.1",
     "ajv-errors": "^3.0.0",
     "ajv-formats": "^2.1.0",
