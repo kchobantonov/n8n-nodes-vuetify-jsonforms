@@ -1,8 +1,6 @@
 import isbot from "isbot";
 import { DateTime } from "luxon";
 import {
-  GenericValue,
-  IDataObject,
   INodeExecutionData,
   INodeProperties,
   INodeType,
@@ -12,6 +10,9 @@ import {
   NodeConnectionType,
 } from "n8n-workflow";
 
+import Ajv from "ajv";
+import addFormats from "ajv-formats";
+import keywords from "ajv-keywords";
 import {
   formRespondMode,
   respondWithOptions,
@@ -23,9 +24,6 @@ import {
   validateResponseModeConfiguration,
   validateWebhookAuthentication,
 } from "./utils";
-import Ajv from "ajv";
-import addFormats from "ajv-formats";
-import keywords from "ajv-keywords";
 
 const ajv = new Ajv({
   allErrors: true,
@@ -138,6 +136,7 @@ export class VuetifyJsonFormsTrigger implements INodeType {
         type: "json",
         default: JSON.stringify(
           {
+            $schema: "http://json-schema.org/draft-07/schema#",
             type: "object",
             properties: {
               name: {
@@ -158,9 +157,10 @@ export class VuetifyJsonFormsTrigger implements INodeType {
               },
             },
             required: ["name", "email", "message"],
+            additionalProperties: false,
           },
           null,
-          2
+          2,
         ),
         description: "JSON Schema that defines the form structure",
       },
@@ -190,12 +190,23 @@ export class VuetifyJsonFormsTrigger implements INodeType {
               {
                 type: "Button",
                 label: "Submit",
-                action: "submit",
+                action: "n8n:submit",
+                color: "primary",
+                params: {
+                  action: "submit",
+                },
+                rule: {
+                  effect: "ENABLE",
+                  condition: {
+                    scope: "#/",
+                    schema: { $ref: "/#" },
+                  },
+                },
               },
             ],
           },
           null,
-          2
+          2,
         ),
         description: "UI Schema that defines how the form should be rendered",
       },
@@ -220,7 +231,7 @@ export class VuetifyJsonFormsTrigger implements INodeType {
             allowAdditionalPropertiesIfMissing: false,
           },
           null,
-          2
+          2,
         ),
         description: "Data that defines the initial data for the form",
       },
@@ -250,6 +261,25 @@ export class VuetifyJsonFormsTrigger implements INodeType {
               "Override default styling of the public form interface with CSS",
           },
           {
+            displayName: "Event JSON Schema",
+            name: "eventJsonSchema",
+            type: "json",
+            default: JSON.stringify(
+              {
+                type: "object",
+                properties: {
+                  action: {
+                    type: "string",
+                  },
+                },
+                additionalProperties: false,
+              },
+              null,
+              2,
+            ),
+            description: "Event JSON schema that validates all Button params",
+          },
+          {
             displayName: "Ignore Bots",
             name: "ignoreBots",
             type: "boolean",
@@ -264,12 +294,14 @@ export class VuetifyJsonFormsTrigger implements INodeType {
             default: false,
             description: "Whether to show the form in readonly mode",
           },
+
           {
             ...useWorkflowTimezone,
             default: true,
             description:
               "Whether to use the workflow timezone in 'submittedAt' field or UTC",
           },
+
           {
             displayName: "Validation Mode",
             name: "validationMode",
@@ -305,7 +337,7 @@ export class VuetifyJsonFormsTrigger implements INodeType {
                 theme: { dark: true },
               },
               null,
-              2
+              2,
             ),
             description: "Override default Vuetify options",
           },
@@ -332,6 +364,7 @@ export class VuetifyJsonFormsTrigger implements INodeType {
       vuetifyOptions?: string;
       readonly?: boolean;
       validationMode?: "ValidateAndShow" | "ValidateAndHide" | "NoValidation";
+      eventJsonSchema?: string;
     };
 
     const req = context.getRequestObject();
@@ -344,7 +377,7 @@ export class VuetifyJsonFormsTrigger implements INodeType {
       }
       await validateWebhookAuthentication(
         context,
-        FORM_TRIGGER_AUTHENTICATION_PROPERTY
+        FORM_TRIGGER_AUTHENTICATION_PROPERTY,
       );
     } catch (error) {
       if (error instanceof WebhookAuthorizationError) {
@@ -365,26 +398,37 @@ export class VuetifyJsonFormsTrigger implements INodeType {
     } else if (req.method === "POST") {
       // Process form submission
 
-      const formData = JSON.parse(req.body) as
-        | IDataObject
-        | GenericValue
-        | GenericValue[]
-        | IDataObject[];
+      const request = JSON.parse(req.body);
+
       const schema = context.getNodeParameter("jsonSchema") as string;
 
-      const validate = ajv.compile(JSON.parse(schema));
+      const validateData = ajv.compile(JSON.parse(schema));
 
-      const valid = validate(formData);
-      if (!valid) {
+      if (!validateData(request.data)) {
         res.writeHead(400, { "Content-Type": "application/json" });
         res.end(
           JSON.stringify({
             message: "Data validation failed",
-            errors: validate.errors,
-          })
+            errors: validateData.errors,
+          }),
         );
         return { noWebhookResponse: true };
       }
+
+      if (options.eventJsonSchema) {
+        const validateEvent = ajv.compile(JSON.parse(options.eventJsonSchema));
+        if (!validateEvent(request.event)) {
+          res.writeHead(400, { "Content-Type": "application/json" });
+          res.end(
+            JSON.stringify({
+              message: "Event validation failed",
+              errors: validateEvent.errors,
+            }),
+          );
+          return { noWebhookResponse: true };
+        }
+      }
+
       //const responseMode = context.getNodeParameter("responseMode") as string;
 
       let { useWorkflowTimezone } = options;
@@ -400,7 +444,8 @@ export class VuetifyJsonFormsTrigger implements INodeType {
       const returnData: INodeExecutionData[] = [
         {
           json: {
-            formData,
+            data: request.data,
+            event: request.event,
             submittedAt: submittedAt,
             formMode: mode,
             ...(Object.keys(req.query || {}).length > 0 && {
@@ -442,6 +487,7 @@ export class VuetifyJsonFormsTrigger implements INodeType {
       vuetifyOptions?: string;
       readonly?: boolean;
       validationMode?: "ValidateAndShow" | "ValidateAndHide" | "NoValidation";
+      eventJsonSchema?: string;
     };
 
     return `
@@ -475,7 +521,7 @@ export class VuetifyJsonFormsTrigger implements INodeType {
               postUrl = window.location.search;
             }
 
-            await fetch(postUrl, { method: 'POST', body: JSON.stringify(data) });
+            await fetch(postUrl, { method: 'POST', body: JSON.stringify( { data: data, event: event.params } ) });
           } finally {
             event.context.readonly = false;
           }
@@ -484,7 +530,7 @@ export class VuetifyJsonFormsTrigger implements INodeType {
 
       const onHandleAction = (customEvent) => {
         let [event] = customEvent.detail;
-        if (event.action === 'submit') {
+        if (event.action === 'n8n:submit') {
           event.callback = submit;
         }
       };
