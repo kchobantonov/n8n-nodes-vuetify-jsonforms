@@ -1,0 +1,84 @@
+{
+  "name": "@chobantonov/n8n-nodes-vuetify-jsonforms",
+  "version": "0.1.0",
+  "description": "Custom n8n node using jsonforms-vuetify-webcomponent for form creation",
+  "keywords": [
+    "n8n-community-node-package",
+    "form",
+    "forms",
+    "json",
+    "jsonforms",
+    "renderengine",
+    "jsonschema",
+    "schema",
+    "uischema",
+    "layout",
+    "customization",
+    "template"
+  ],
+  "license": "MIT",
+  "publishConfig": {
+    "access": "public"
+  },
+  "homepage": "",
+  "author": {
+    "name": "Krasimir Chobantonov",
+    "email": "kchobantonov@gmail.com"
+  },
+  "repository": {
+    "type": "git",
+    "url": "https://github.com/kchobantonov/n8n-nodes-vuetify-jsonforms.git"
+  },
+  "bugs": "https://github.com/kchobantonov/n8n-nodes-vuetify-jsonforms/issues",
+  "engines": {
+    "node": ">=20.15",
+    "pnpm": ">=9.1"
+  },
+  "packageManager": "pnpm@10.13.1",
+  "main": "index.js",
+  "scripts": {
+    "build": "npx rimraf dist && tsc && gulp build:icons",
+    "dev": "tsc --watch",
+    "format": "prettier nodes credentials --write",
+    "lint": "eslint nodes credentials package.json",
+    "lintfix": "eslint nodes credentials package.json --fix",
+    "prepublishOnly": "npm run build && npm run lint -c .eslintrc.prepublish.js nodes credentials package.json"
+  },
+  "files": [
+    "dist"
+  ],
+  "n8n": {
+    "n8nNodesApiVersion": 1,
+    "credentials": [],
+    "nodes": [
+      "dist/nodes/VuetifyJsonForms/VuetifyJsonFormsTrigger.node.js"
+    ]
+  },
+  "dependencies": {
+    "@chobantonov/jsonforms-vuetify-webcomponent": "3.6.0",
+    "ajv": "^8.6.1",
+    "ajv-errors": "^3.0.0",
+    "ajv-formats": "^2.1.0",
+    "ajv-i18n": "^4.2.0",
+    "ajv-keywords": "^5.1.0",
+    "basic-auth": "^2.0.1",
+    "isbot": "3.6.13",
+    "jsonwebtoken": "^9.0.2",
+    "luxon": "^3.6.2"
+  },
+  "devDependencies": {
+    "@types/basic-auth": "^1.1.8",
+    "@types/jsonwebtoken": "^9.0.10",
+    "@types/luxon": "^3.6.2",
+    "@typescript-eslint/parser": "~8.32.0",
+    "eslint": "^8.57.0",
+    "eslint-plugin-n8n-nodes-base": "^1.16.3",
+    "gulp": "^5.0.0",
+    "prettier": "^3.5.3",
+    "rimraf": "^6.0.1",
+    "typescript": "^5.8.2"
+  },
+  "peerDependencies": {
+    "n8n-workflow": "*"
+  }
+}
