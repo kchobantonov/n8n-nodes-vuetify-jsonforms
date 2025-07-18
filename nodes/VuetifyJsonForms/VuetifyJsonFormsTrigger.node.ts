@@ -50,7 +50,7 @@ export class VuetifyJsonFormsTrigger implements INodeType {
   description: INodeTypeDescription = {
     displayName: "Vuetify JsonForms Form Trigger",
     name: "vuetifyJsonFormsTrigger",
-    icon: { light: "file:jsonforms.png", dark: "file:jsonforms.png" },
+    icon: { light: "file:jsonforms.svg", dark: "file:jsonforms.svg" },
     group: ["trigger"],
     version: 1,
     subtitle: '={{$parameter["operation"] + ": " + $parameter["path"]}}',
