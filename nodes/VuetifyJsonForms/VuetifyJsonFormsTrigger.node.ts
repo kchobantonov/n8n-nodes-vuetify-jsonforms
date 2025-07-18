@@ -58,8 +58,8 @@ export class VuetifyJsonFormsTrigger implements INodeType {
     icon: { light: "file:jsonforms.svg", dark: "file:jsonforms.svg" },
     group: ["trigger"],
     version: 1,
-    subtitle: '={{$parameter["operation"] + ": " + $parameter["path"]}}',
-    description: "Creates a form using JsonForms Vuetify WebComponent",
+    description:
+      "Generate webforms in n8n and pass their responses to the workflow",
     defaults: {
       name: "On form submission",
     },
