@@ -355,8 +355,6 @@ export class VuetifyJsonFormsTrigger implements INodeType {
       throw error;
     }
 
-    const path = context.getNodeParameter("path") as string;
-
     validateResponseModeConfiguration(context);
 
     if (req.method === "GET") {
@@ -404,7 +402,6 @@ export class VuetifyJsonFormsTrigger implements INodeType {
           json: {
             formData,
             submittedAt: submittedAt,
-            path,
             formMode: mode,
             ...(Object.keys(req.query || {}).length > 0 && {
               formQueryParameters: req.query,
