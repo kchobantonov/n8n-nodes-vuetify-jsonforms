@@ -7,6 +7,7 @@ import {
   NodeOperationError,
 } from "n8n-workflow";
 import { WebhookAuthorizationError } from "./error";
+import sanitize from 'sanitize-html';
 
 export function formatPrivateKey(
   privateKey: string,
@@ -220,4 +221,16 @@ export async function validateWebhookAuthentication(
       throw new WebhookAuthorizationError(403, error.message);
     }
   }
+}
+
+export function sanitizeCustomCss(css: string | undefined): string | undefined {
+	if (!css) return undefined;
+
+	// Use sanitize-html with custom settings for CSS
+	return sanitize(css, {
+		allowedTags: [], // No HTML tags allowed
+		allowedAttributes: {}, // No attributes allowed
+		// This ensures we're only keeping the text content
+		// which should be the CSS, while removing any HTML/script tags
+	});
 }

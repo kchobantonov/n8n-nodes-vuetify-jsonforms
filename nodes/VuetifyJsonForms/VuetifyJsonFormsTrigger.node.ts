@@ -1,6 +1,8 @@
 import isbot from "isbot";
 import { DateTime } from "luxon";
 import {
+  FORM_NODE_TYPE,
+  IDataObject,
   INodeExecutionData,
   INodeProperties,
   INodeType,
@@ -8,6 +10,8 @@ import {
   IWebhookFunctions,
   IWebhookResponseData,
   NodeConnectionType,
+  NodeTypeAndVersion,
+  WAIT_NODE_TYPE,
 } from "n8n-workflow";
 
 import Ajv from "ajv";
@@ -21,6 +25,7 @@ import {
 import { WebhookAuthorizationError } from "./error";
 import { FORM_TRIGGER_AUTHENTICATION_PROPERTY } from "./interfaces";
 import {
+  sanitizeCustomCss,
   validateResponseModeConfiguration,
   validateWebhookAuthentication,
 } from "./utils";
@@ -250,6 +255,43 @@ export class VuetifyJsonFormsTrigger implements INodeType {
               rows: 10,
               editor: "cssEditor",
             },
+            default: `:root {
+              /* Fonts */
+              --font-family: "Open Sans", sans-serif;
+              --font-size-body: 12px;
+
+              /* Colors */
+              --color-background: #fbfcfe;
+              --color-card-bg: #ffffff;
+              --color-card-border: #dbdfe7;
+              --color-card-shadow: rgba(99, 77, 255, 0.06);
+              --color-input-border: #dbdfe7;
+
+              /* Border Radii */
+              --border-radius-card: 8px;
+
+              /* Spacing */
+       				--padding-container-top: 24px;
+              --padding-card: 24px;
+              --margin-bottom-card: 16px;
+
+              /* Dimensions */
+              --container-width: 448px;
+
+              /* Others */
+              --box-shadow-card: 0px 4px 16px 0px var(--color-card-shadow);
+      			}`,
+            description:
+              "Override default styling of the public form interface with CSS",
+          },
+          {
+            displayName: "Custom JSON Form Styling",
+            name: "customStyle",
+            type: "string",
+            typeOptions: {
+              rows: 10,
+              editor: "cssEditor",
+            },
             default: `
 :host { 
   .v-application__wrap {
@@ -468,12 +510,24 @@ export class VuetifyJsonFormsTrigger implements INodeType {
     return { noWebhookResponse: true };
   }
 
+  static isFormConnected = (nodes: NodeTypeAndVersion[]) => {
+    return nodes.some(
+      (n) =>
+        n.type === FORM_NODE_TYPE ||
+        (n.type === WAIT_NODE_TYPE && n.parameters?.resume === "form"),
+    );
+  };
+
   static generateFormHtml(context: IWebhookFunctions): string {
     const schema = context.getNodeParameter("jsonSchema") as string;
     const uischema = context.getNodeParameter("uiSchema") as string;
     const data = context.getNodeParameter("data") as string;
     const config = context.getNodeParameter("config") as string;
-    const webhookUrl = context.getNodeWebhookUrl("default");
+    //const webhookUrl = context.getNodeWebhookUrl("default");
+    let responseMode = context.getNodeParameter("responseMode", "") as string;
+
+    let formSubmittedText;
+    let redirectUrl;
 
     const options = context.getNodeParameter("options", {}) as {
       ignoreBots?: boolean;
@@ -487,19 +541,216 @@ export class VuetifyJsonFormsTrigger implements INodeType {
       formSubmittedText?: string;
       useWorkflowTimezone?: boolean;
       customCss?: string;
+      customStyle?: string;
       vuetifyOptions?: string;
       readonly?: boolean;
       validationMode?: "ValidateAndShow" | "ValidateAndHide" | "NoValidation";
       eventJsonSchema?: string;
     };
 
+    if (options.respondWithOptions) {
+      const values = (options.respondWithOptions as IDataObject)
+        .values as IDataObject;
+      if (values.respondWith === "text") {
+        formSubmittedText = values.formSubmittedText as string;
+      }
+      if (values.respondWith === "redirect") {
+        redirectUrl = values.redirectUrl as string;
+      }
+    } else {
+      formSubmittedText = options.formSubmittedText as string;
+    }
+
+    const connectedNodes = context.getChildNodes(context.getNode().name, {
+      includeNodeParameters: true,
+    });
+    const hasNextPage = VuetifyJsonFormsTrigger.isFormConnected(connectedNodes);
+
+    if (hasNextPage) {
+      redirectUrl = undefined;
+      responseMode = "responseNode";
+    }
+
+    if (formSubmittedText === undefined) {
+      formSubmittedText = "Your response has been recorded";
+    }
+
+    const useResponseData = responseMode === "responseNode";
+
+    const dangerousCustomCss = sanitizeCustomCss(options.customCss);
     return `
 <!DOCTYPE html>
 <html>
+	<head>
+		<meta charset='UTF-8' />
+		<meta name='viewport' content='width=device-width, initial-scale=1.0' />
+		<link href="https://fonts.googleapis.com/css2?family=Open+Sans:ital,wght@0,300..800;1,300..800&display=swap" rel="stylesheet">
+
+    <style>
+    :root {
+				/* Fonts */
+				--font-family: "Open Sans", sans-serif;
+				--font-size-body: 12px;
+
+				/* Colors */
+				--color-background: #fbfcfe;
+				--color-card-bg: #ffffff;
+				--color-card-border: #dbdfe7;
+				--color-card-shadow: rgba(99, 77, 255, 0.06);
+				--color-input-border: #dbdfe7;
+
+				/* Border Radii */
+				--border-radius-card: 8px;
+
+				/* Spacing */
+				--padding-container-top: 24px;
+				--padding-card: 24px;
+				--margin-bottom-card: 16px;
+
+ 				/* Dimensions */
+				--container-width: 448px;
+
+				/* Others */
+				--box-shadow-card: 0px 4px 16px 0px var(--color-card-shadow);
+			}
+
+ 			*,
+			::after,
+			::before {
+				box-sizing: border-box;
+				margin: 0;
+				padding: 0;
+			}
+
+      body {
+				font-family: var(--font-family);
+				font-weight: 400;
+				font-size: var(--font-size-body);
+				display: flex;
+				flex-direction: column;
+				justify-content: start;
+				background-color: var(--color-background);
+			}
+
+      .container {
+				margin: auto;
+				text-align: center;
+				padding-top: var(--padding-container-top);
+				width: var(--container-width);
+			}
+
+
+ 			.card {
+				padding: var(--padding-card);
+				background-color: var(--color-card-bg);
+				border: 1px solid var(--color-card-border);
+				border-radius: var(--border-radius-card);
+				box-shadow: var(--box-shadow-card);
+				margin-bottom: var(--margin-bottom-card);
+			}
+
+      @media only screen and (max-width: 500px) {
+				body {
+					background-color: var(--color-background);
+				}
+        .container {
+					width: 95%;
+					min-height: 100vh;
+					padding: 24px;
+					border: 0px solid var(--color-input-border);
+					border-radius: 0px;
+					box-shadow: 0px 0px 0px 0px #ffffff;
+				}
+				.card {
+					padding: 0px;
+					background-color: var(--color-card-bg);
+					border: 0px solid var(--color-input-border);
+					border-radius: 0px;
+					box-shadow: 0px 0px 0px 0px #ffffff;
+					margin-bottom: 0px;
+				}
+			}
+
+    </style>
+
+    ${dangerousCustomCss ? `<style>${dangerousCustomCss}</style>` : ""}
+  </head>
   <body>
-    <vuetify-json-forms id="vuetify-json-forms"></vuetify-json-forms>
+		<div class='container'>
+      <div class='card' id='n8n-form'>
+        <vuetify-json-forms id="vuetify-json-forms"></vuetify-json-forms>
+      </div>
+
+      <div class='card' id='submitted-form' style='display: none;'>
+        <div class='form-header'>
+          <h1 id='submitted-header'>Form Submitted</h1>
+          ${
+            formSubmittedText
+              ? `<p id='submitted-content'>
+              ${formSubmittedText}
+            </p>`
+              : ``
+          }
+        </div>
+      </div>
+      ${redirectUrl ? `<a id='redirectUrl' href='${redirectUrl}' style='display: none;'></a>` : ""}
+      <input id="useResponseData" style="display: none;" value=${useResponseData} />
+    </div>
 
     <script type="text/javascript">
+
+			const n8nForm = document.querySelector('#n8n-form');
+
+    	let interval = 1000;
+			let timeoutId;
+			let formWaitingUrl;
+
+			const checkExecutionStatus = async () => {
+				if (!interval) return;
+
+				try {
+					const response = await fetch(\`\${formWaitingUrl ?? window.location.href}/n8n-execution-status\`);
+					const text = (await response.text()).trim();
+
+					if (text === "form-waiting") {
+						window.location.replace(formWaitingUrl ?? window.location.href);
+						return;
+					}
+
+					if (text === "success") {
+						n8nForm.style.display = 'none';
+						document.querySelector('#submitted-form').style.display = 'block';
+						clearTimeout(timeoutId);
+						return;
+					}
+
+					if (text === "null") {
+						n8nForm.style.display = 'none';
+						document.querySelector('#submitted-form').style.display = 'block';
+						document.querySelector('#submitted-header').textContent = 'Could not get execution status';
+						document.querySelector('#submitted-content').textContent =
+							'Make sure "Save successful production executions" is enabled in your workflow settings';
+						clearTimeout(timeoutId);
+						return;
+					}
+
+					if(["canceled", "crashed", "error" ].includes(text)) {
+						n8nForm.style.display = 'none';
+						document.querySelector('#submitted-form').style.display = 'block';
+						document.querySelector('#submitted-header').textContent = 'Problem submitting response';
+						document.querySelector('#submitted-content').textContent =
+							'Please try again or contact support if the problem persists';
+						clearTimeout(timeoutId);
+						return;
+					}
+
+					interval = Math.round(interval * 1.1);
+					timeoutId = setTimeout(checkExecutionStatus, interval);
+				} catch (error) {
+					console.error("Error fetching data:", error);
+				}
+			};
+
 
       const onChange = (customEvent) => {
         let [event] = customEvent.detail;
@@ -519,14 +770,82 @@ export class VuetifyJsonFormsTrigger implements INodeType {
           try {
             event.context.readonly = true;
 
-   					let postUrl = '${webhookUrl}';
+            let postUrl = '';
             if (!window.location.href.includes('form-waiting')) {
               postUrl = window.location.search;
             }
 
-            await fetch(postUrl, { method: 'POST', body: JSON.stringify( { data: data, event: event.params } ) });
+            const response = await fetch(postUrl, { method: 'POST', body: JSON.stringify( { data: data, event: event.params } ) });
+            const useResponseData = document.getElementById("useResponseData").value;
+
+            if (useResponseData === "true") {
+              const text = await response.text();
+              let json;
+
+              try{
+                json = JSON.parse(text);
+              } catch (e) {}
+
+              if(json?.formWaitingUrl) {
+                formWaitingUrl = json.formWaitingUrl;
+                clearTimeout(timeoutId);
+                timeoutId = setTimeout(checkExecutionStatus, interval);
+                return;
+              }
+
+              if (json?.redirectURL) {
+                const url = json.redirectURL.includes("://") ? json.redirectURL : "https://" + json.redirectURL;
+                window.location.replace(url);
+                return;
+              }
+
+              if (json?.formSubmittedText) {
+                n8nForm.style.display = 'none';
+                document.querySelector('#submitted-form').style.display = 'block';
+                document.querySelector('#submitted-content').textContent = json.formSubmittedText;
+                return;
+              }
+
+              if (text) {
+                document.body.innerHTML = text;
+                return;
+              }
+
+              if (text === '') {
+                // this is empty cleanup response from responsePromise
+                // no need to keep checking execution status
+                clearTimeout(timeoutId);
+                interval = 0;
+              }
+            }
+
+            if (response.status === 200) {
+              if(response.redirected) {
+                window.location.replace(response.url);
+                return;
+              }
+              const redirectUrl = document.getElementById("redirectUrl");
+              if (redirectUrl) {
+                window.location.replace(redirectUrl.href);
+              } else {
+                n8nForm.style.display = 'none';
+                document.querySelector('#submitted-form').style.display = 'block';
+              }
+            } else {
+              n8nForm.style.display = 'none';
+              document.querySelector('#submitted-form').style.display = 'block';
+              document.querySelector('#submitted-header').textContent = 'Problem submitting response';
+              document.querySelector('#submitted-content').textContent =
+                'Please try again or contact support if the problem persists';
+            }
+
           } finally {
             event.context.readonly = false;
+
+            if (window.location.href.includes('form-waiting')) {
+								clearTimeout(timeoutId);
+								timeoutId = setTimeout(checkExecutionStatus, interval);
+						}
           }
         }
       };
@@ -545,7 +864,7 @@ export class VuetifyJsonFormsTrigger implements INodeType {
       ${config !== undefined && config !== null ? `form.setAttribute("config",` + JSON.stringify(config).replace(/\//g, "\\/") + `);` : ""}
       
       ${options.vuetifyOptions ? `form.setAttribute('vuetify-options', ` + JSON.stringify(options.vuetifyOptions).replace(/\//g, "\\/") + `);` : ""}
-      ${options.customCss ? `form.setAttribute('custom-style', ` + JSON.stringify(options.customCss).replace(/\//g, "\\/") + `);` : ""}
+      ${options.customStyle ? `form.setAttribute('custom-style', ` + JSON.stringify(sanitizeCustomCss(options.customStyle)).replace(/\//g, "\\/") + `);` : ""}
       ${options.validationMode ? `form.setAttribute('validation-mode', ` + JSON.stringify(options.validationMode).replace(/\//g, "\\/") + `);` : ""}
       ${typeof options.readonly === "boolean" && options.readonly ? `form.setAttribute('readonly', '');` : ""}
 
