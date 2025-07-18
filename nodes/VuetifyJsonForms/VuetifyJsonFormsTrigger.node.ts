@@ -129,7 +129,6 @@ export class VuetifyJsonFormsTrigger implements INodeType {
         ],
         default: "none",
       },
-      webhookPath,
       {
         displayName: "JsonForms JSON Schema",
         name: "jsonSchema",
@@ -323,6 +322,10 @@ export class VuetifyJsonFormsTrigger implements INodeType {
             default: "ValidateAndShow",
             description:
               "Determines how validation errors are handled and displayed",
+          },
+          {
+            ...webhookPath,
+            required: false,
           },
           {
             ...respondWithOptions,
