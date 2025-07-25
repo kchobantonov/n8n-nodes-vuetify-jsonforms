@@ -1,0 +1,13 @@
+services:
+  n8n:
+    image: n8nio/n8n:latest
+    ports:
+      - "5678:5678"
+    volumes:
+      - ./dist:/data/custom-nodes/n8n-nodes-vuetify-jsonforms
+      - ./node_modules:/data/custom-nodes/n8n-nodes-vuetify-jsonforms/node_modules
+    environment:
+      - N8N_CUSTOM_EXTENSIONS=/data/custom-nodes
+      - N8N_LOG_LEVEL=debug
+      - NODE_ENV=development
+    restart: always
